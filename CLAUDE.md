@@ -4,7 +4,7 @@ Instruções permanentes para sessões do Claude neste repo.
 
 ## O que é
 
-Escape room virtual do CNA Taquara, "O Sumiço da Dani". Peça de marketing e
+Escape room virtual do CNA, "O Sumiço da Dani" (nasceu no CNA Taquara). Peça de marketing e
 captação de leads, com 5 salas que seguem o layout físico da escola:
 Recepção, Garden, Sala de Espera, Sala de Aula, Auditório.
 
@@ -31,7 +31,28 @@ const SB_URL='https://gpnwmsnayrqjcmhqrtpx.supabase.co';
 function rpc(...)   // helper único, só RPC
 ```
 
-Este app **não lê tabela direto**. Tudo passa por RPC.
+Escrita e timing passam por RPC. Leitura direta só de `crm_unidades`,
+`escape_temporadas`, `escape_salas` e das views de ranking.
+
+### Base única multiunidade (desde 30/09/2026)
+
+O banco `gpnwmsnayrqjcmhqrtpx` ("CRM CNA") é a base única da rede. Tabela de
+dado de unidade tem coluna `unidade` (slug de `crm_unidades`), inclusive as
+`escape_*`. Globais, sem `unidade`: `crm_unidades`, `crm_modulos`,
+`crm_papel_permissoes`, `crm_usuarios`, `crm_sessoes`.
+
+- A página descobre a unidade por `?unidade=<slug>`, validada em
+  `crm_unidades` (status diferente de `inativa`). Sem parâmetro ou com slug
+  inválido: `taquara`, para os links e QR codes antigos continuarem valendo.
+- `escape_iniciar` recebe `p_unidade`; `escape_salas` é filtrada por unidade.
+- As views de ranking não têm `unidade`: o ranking por sala filtra por
+  `sala_id` (das salas da unidade) e o geral por `temporada_id` (temporadas da
+  unidade).
+- Nome exibido vem de `crm_unidades.nome`. **Proibido `if` por nome ou slug de
+  unidade.** Comportamento por unidade vem do banco.
+
+No CRM, login é por vínculo (`crm_usuario_unidades`) e `crm_definir_senha` está
+depreciada (use `crm_equipe_definir_senha`).
 
 ## Timing é server-side, e isso não é negociável
 
