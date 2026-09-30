@@ -201,6 +201,23 @@ async function sel(path){
   return r.json();
 }
 
+/* ============ UNIDADE ============
+   Vem de ?unidade=<slug>, validada em crm_unidades (status diferente de inativa).
+   Sem parametro ou com slug invalido: taquara, para os links e QR codes que ja
+   existem continuarem funcionando. Nome exibido vem do banco. */
+const UNIDADE_PADRAO='taquara';
+const UNID={slug:UNIDADE_PADRAO,nome:'',temporadas:[]};
+async function resolveUnidade(){
+  const pedida=(new URLSearchParams(location.search).get('unidade')||'').trim().toLowerCase();
+  let r=[];
+  if(pedida) r=await sel('crm_unidades?slug=eq.'+encodeURIComponent(pedida)+'&status=neq.inativa&select=slug,nome');
+  if(!r.length) r=await sel('crm_unidades?slug=eq.'+UNIDADE_PADRAO+'&select=slug,nome');
+  if(r.length){UNID.slug=r[0].slug;UNID.nome=r[0].nome;}
+  if(UNID.nome) document.title='O Sumiço da Dani · CNA '+UNID.nome;
+  const t=await sel('escape_temporadas?unidade=eq.'+encodeURIComponent(UNID.slug)+'&select=id');
+  UNID.temporadas=t.map(x=>x.id);
+}
+
 const app=document.getElementById('app');
 const S={jogador:null,sessao:null,temporada:null,salas:[],feitas:{},sala:null,t0:0,tick:null,erros:0,dicas:0,fim:null,limite:0,travada:false};
 const QR=new URLSearchParams(location.search).get('qr');
@@ -210,7 +227,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const digits=s=>String(s||'').replace(/\D/g,'');
 const marca=(compacta)=>`<div class="marca${compacta?' compacta':''}">
   <img src="assets/logo-cna.png" alt="CNA Idiomas" width="118" height="52">
-  <span class="unidade">Unidade Taquara</span></div>`;
+  <span class="unidade">${UNID.nome?'Unidade '+esc(UNID.nome):''}</span></div>`;
 const rodape=()=>`<div class="rodape">Siga a gente em <a href="${IG}" target="_blank" rel="noopener">@cna.taquara</a>
   <span class="mote">Você monstrão no Inglês</span></div>`;
 
@@ -369,7 +386,7 @@ function telaIntro(alerta){
       <div class="msg" id="m-wa"></div>
     </div>
     <div class="field">
-      <label>Você já estuda no CNA Taquara? <span class="obrig">*</span></label>
+      <label>Você já estuda no CNA${UNID.nome?' '+esc(UNID.nome):''}? <span class="obrig">*</span></label>
       <div class="choices">
         <button class="choice" type="button" data-aluno="1" aria-pressed="false">Sou aluno</button>
         <button class="choice" type="button" data-aluno="0" aria-pressed="false">Ainda não</button>
@@ -428,7 +445,7 @@ function telaIntro(alerta){
     const ape=el('f-ape').value.trim(), tel=digits(wa.value);
     try{
       const r=await rpc('escape_iniciar',{p_nome:nome,p_apelido:ape,p_whatsapp:tel,
-        p_e_aluno:aluno,p_para_quem:quem,p_origem_qr:QR});
+        p_e_aluno:aluno,p_para_quem:quem,p_origem_qr:QR,p_unidade:UNID.slug});
       S.jogador=Object.assign({},r,{nome:nome,whatsapp:tel,e_aluno:aluno});
       S.sessao=r.sessao_id; S.temporada=r.temporada; S.feitas={}; S.fim=null;
       await carregaSalas(); telaMapa();
@@ -437,7 +454,7 @@ function telaIntro(alerta){
 }
 
 async function carregaSalas(){
-  S.salas=await sel('escape_salas?ativa=eq.true&order=ordem.asc&select=id,slug,nome,andar,ordem,mecanica,teto_ms');
+  S.salas=await sel('escape_salas?unidade=eq.'+encodeURIComponent(UNID.slug)+'&ativa=eq.true&order=ordem.asc&select=id,slug,nome,andar,ordem,mecanica,teto_ms');
 }
 
 /* ============ MAPA ============ */
@@ -717,7 +734,7 @@ async function novaRodada(){
   app.innerHTML='<div class="load">Remontando a escola…</div>';
   try{
     const r=await rpc('escape_iniciar',{p_nome:S.jogador.nome,p_apelido:S.jogador.apelido,
-      p_whatsapp:S.jogador.whatsapp,p_e_aluno:!!S.jogador.e_aluno,p_origem_qr:QR});
+      p_whatsapp:S.jogador.whatsapp,p_e_aluno:!!S.jogador.e_aluno,p_origem_qr:QR,p_unidade:UNID.slug});
     S.sessao=r.sessao_id; S.feitas={}; S.fim=null; telaMapa();
   }catch(e){ location.reload(); }
 }
@@ -745,11 +762,13 @@ async function telaRanking(aba){
   const lista=document.getElementById('lista');
   try{
     if(aba.indexOf('sala:')===0){
-      const d=await sel(`escape_ranking_sala?sala_slug=eq.${aba.slice(5)}&order=posicao.asc&limit=10&select=posicao,apelido,e_aluno,pontuacao,tempo_ms`);
+      const sala=S.salas.find(x=>x.slug===aba.slice(5));
+      const d=sala?await sel(`escape_ranking_sala?sala_id=eq.${sala.id}&order=posicao.asc&limit=10&select=posicao,apelido,e_aluno,pontuacao,tempo_ms`):[];
       lista.innerHTML=d.length?d.map(x=>linha(x,x.tempo_ms)).join(''):vazio();
     }else{
       const f=aba==='alunos'?'&e_aluno=eq.true':'';
-      const d=await sel(`escape_ranking_geral?order=posicao.asc&limit=10${f}&select=posicao,apelido,e_aluno,pontuacao,tempo_total_ms`);
+      const tp=UNID.temporadas.length?`&temporada_id=in.(${UNID.temporadas.join(',')})`:'&temporada_id=is.null';
+      const d=await sel(`escape_ranking_geral?order=posicao.asc&limit=10${f}${tp}&select=posicao,apelido,e_aluno,pontuacao,tempo_total_ms`);
       lista.innerHTML=d.length?d.map((x,i)=>linha(Object.assign({},x,{posicao:aba==='alunos'?i+1:x.posicao}),x.tempo_total_ms)).join(''):vazio();
     }
   }catch(e){ lista.innerHTML='<div class="alerta">Não deu para carregar o ranking agora.</div>'; }
@@ -765,7 +784,7 @@ function linha(d,t){
 
 /* ============ BOOT ============ */
 (async()=>{
-  try{ await carregaSalas(); telaIntro(); }
+  try{ await resolveUnidade(); await carregaSalas(); telaIntro(); }
   catch(e){ app.innerHTML=`${marca()}<div class="alerta">Não deu para abrir o jogo agora. Recarregue a página.</div>`; }
 })();
 </script>
