@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>O Sumiço da Dani · CNA Taquara</title>
-<meta name="description" content="A Dani sumiu e deixou pistas em inglês por cinco ambientes do CNA Taquara. Quanto tempo você leva para achar ela?">
+<title>CNA · O Sumiço da Dani</title>
+<meta name="description" content="A Dani sumiu e deixou pistas em inglês por cinco ambientes do CNA. Quanto tempo você leva para achar ela?">
 <meta name="theme-color" content="#E6143C">
-<meta property="og:title" content="O Sumiço da Dani · CNA Taquara">
+<meta property="og:title" content="CNA · O Sumiço da Dani">
 <meta property="og:description" content="Cinco salas. Cinco enigmas. Ache a Dani antes que o tempo acabe.">
 <link rel="icon" href="assets/logo-cna.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -187,7 +187,6 @@ audio{width:100%;margin-top:16px}
 const SB_URL='https://gpnwmsnayrqjcmhqrtpx.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwbndtc25heXJxamNtaHFydHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyNjY4NTEsImV4cCI6MjEwMDg0Mjg1MX0.xQARkaQ9kPmVwqMM5ixfUCHP6cmEHOtI2eqVWFEjlrw';
 const H={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
-const IG='https://instagram.com/cna.taquara';
 
 async function rpc(fn,args){
   const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:H,body:JSON.stringify(args||{})});
@@ -206,16 +205,21 @@ async function sel(path){
    Sem parametro ou com slug invalido: taquara, para os links e QR codes que ja
    existem continuarem funcionando. Nome exibido vem do banco. */
 const UNIDADE_PADRAO='taquara';
-const UNID={slug:UNIDADE_PADRAO,nome:'',temporadas:[]};
+const UNID={slug:UNIDADE_PADRAO,nome:'',temporadas:[],ig:''};
 async function resolveUnidade(){
   const pedida=(new URLSearchParams(location.search).get('unidade')||'').trim().toLowerCase();
   let r=[];
   if(pedida) r=await sel('crm_unidades?slug=eq.'+encodeURIComponent(pedida)+'&status=neq.inativa&select=slug,nome');
   if(!r.length) r=await sel('crm_unidades?slug=eq.'+UNIDADE_PADRAO+'&select=slug,nome');
   if(r.length){UNID.slug=r[0].slug;UNID.nome=r[0].nome;}
-  if(UNID.nome) document.title='O Sumiço da Dani · CNA '+UNID.nome;
+  if(UNID.nome) document.title='CNA '+UNID.nome+' · O Sumiço da Dani';
   const t=await sel('escape_temporadas?unidade=eq.'+encodeURIComponent(UNID.slug)+'&select=id');
   UNID.temporadas=t.map(x=>x.id);
+  try{
+    const c=await sel('crm_configs?unidade=eq.'+encodeURIComponent(UNID.slug)+'&chave=eq.instagram&select=valor');
+    /* aceita "@perfil", "perfil" ou a URL do perfil */
+    UNID.ig=String((c[0]&&c[0].valor)||'').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i,'').replace(/^@/,'').replace(/\/.*$/,'');
+  }catch(e){ UNID.ig=''; }
 }
 
 const app=document.getElementById('app');
@@ -228,7 +232,8 @@ const digits=s=>String(s||'').replace(/\D/g,'');
 const marca=(compacta)=>`<div class="marca${compacta?' compacta':''}">
   <img src="assets/logo-cna.png" alt="CNA Idiomas" width="118" height="52">
   <span class="unidade">${UNID.nome?'Unidade '+esc(UNID.nome):''}</span></div>`;
-const rodape=()=>`<div class="rodape">Siga a gente em <a href="${IG}" target="_blank" rel="noopener">@cna.taquara</a>
+/* Instagram vem de crm_configs.instagram da unidade; sem valor, o link some */
+const rodape=()=>`<div class="rodape">${UNID.ig?`Siga a gente em <a href="https://instagram.com/${encodeURIComponent(UNID.ig)}" target="_blank" rel="noopener">@${esc(UNID.ig)}</a>`:''}
   <span class="mote">Você monstrão no Inglês</span></div>`;
 
 /* ============ VALIDACAO DE TEXTO ============ */
